@@ -5,6 +5,7 @@ import org.springframework.util.Assert;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -26,6 +27,12 @@ public class AgentSessionContext {
      * turns, therefore this must not be used as a replacement for sessionId.
      */
     private final String runId = UUID.randomUUID().toString();
+    private final Set<String> verifiedTravelSubmissions = ConcurrentHashMap.newKeySet();
+    private final Set<String> submissionRepairAgents = ConcurrentHashMap.newKeySet();
+
+    public void markTravelSubmissionVerified(String orderId) { verifiedTravelSubmissions.add(orderId); }
+    public Set<String> getVerifiedTravelSubmissions() { return Set.copyOf(verifiedTravelSubmissions); }
+    public boolean beginSubmissionRepair(String agentId) { return submissionRepairAgents.add(agentId); }
     /**
      * 差旅政策缓存：政策按城市分层（一线/新一线/其他）而不同，必须以城市为键；工具可能并发执行，用 ConcurrentHashMap
      */

@@ -27,6 +27,8 @@
 
 ### 提交流程规则
 
+**成功必须以真实写入为准**：冲突检查、信息收集和审批摘要都不会创建差旅单。只有 `submit_travel_approval` 返回 `success=true`，并提供真实 `orderId`、`processInstanceId` 后，才允许回复“已提交成功”。成功回复必须展示“差旅单号”和“审批单号”；工具未调用、报错或尚待确认时，必须明确说“尚未提交”。不得把“信息已收集”改写成“审批已提交”。
+
 1. **发起新差旅前，必须调用 `check_travel_order_conflicts(departure_city, destination, departure_date, return_date)` 检查冲突**。该工具覆盖两类检查：
    - 同一员工时间重叠（同城=LOW重复提交，跨城=HIGH物理上不可能）；
    - 跨城市交通衔接合理性（同日衔接时间不足 / 次日跨城衔接偏紧）。

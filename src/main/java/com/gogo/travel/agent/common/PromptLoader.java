@@ -3,6 +3,11 @@ package com.gogo.travel.agent.common;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.Clock;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.temporal.TemporalAdjusters;
+import java.time.DayOfWeek;
 import java.time.format.DateTimeFormatter;
 import java.time.format.TextStyle;
 import java.util.LinkedHashSet;
@@ -20,6 +25,7 @@ public final class PromptLoader {
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss");
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Shanghai");
 
     /** prompt 资源根目录（classpath）。 */
     private static final String PROMPT_ROOT = "prompts/";
@@ -41,7 +47,7 @@ public final class PromptLoader {
      * <p>兼容旧用法，不需要缓存优化的场景仍可使用此方法。</p>
      */
     public static String load(String filename) {
-        return render(filename, LocalTime.now().format(TIME_FORMATTER));
+        return render(filename, LocalTime.now(BUSINESS_ZONE).format(TIME_FORMATTER));
     }
 
     /**
@@ -59,7 +65,22 @@ public final class PromptLoader {
      * <p>放在 system prompt 之后，不影响前缀缓存匹配。</p>
      */
     public static String buildTimeContext() {
-        return "当前时间：" + LocalTime.now().format(TIME_FORMATTER);
+        return buildTimeContext(Clock.system(BUSINESS_ZONE));
+    }
+
+    static String buildTimeContext(Clock clock) {
+        ZonedDateTime now = ZonedDateTime.now(clock.withZone(BUSINESS_ZONE));
+        LocalDate today = now.toLocalDate();
+        LocalDate monday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).plusWeeks(1);
+        StringBuilder context = new StringBuilder("当前日期：").append(today).append("（")
+            .append(today.getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.CHINA)).append("），当前时间：")
+            .append(now.format(TIME_FORMATTER)).append("，时区：Asia/Shanghai。\n下周日期（按以下日历转换，禁止自行猜测）：");
+        for (int i = 0; i < 7; i++) {
+            LocalDate date = monday.plusDays(i);
+            context.append("下").append(date.getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.CHINA))
+                .append("=").append(date).append(i == 6 ? "。" : "；");
+        }
+        return context.toString();
     }
 
     /**
@@ -74,7 +95,7 @@ public final class PromptLoader {
         }
         // 先展开片段，再替换变量，使片段内的占位符同样生效
         content = expandIncludes(content, new LinkedHashSet<>(Set.of(filename)), 0);
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
         // 直接注入权威的"星期几"，避免 LLM 从日期自行推算星期导致"本周"范围算错
         String weekday = today.getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.CHINA);
         return content

@@ -1,6 +1,7 @@
 package com.gogo.travel.agent;
 
 import com.gogo.travel.agent.common.PromptLoader;
+import com.gogo.travel.agent.hook.TravelSubmissionVerificationHook;
 import com.gogo.travel.agent.memory.AgentMemoryFactory;
 import com.gogo.travel.agent.tools.TravelOrderConflictTools;
 import com.gogo.travel.agent.tools.TravelOrderWriteTools;
@@ -20,6 +21,9 @@ import java.util.List;
  */
 @Configuration("itineraryManageAgentConfiguration")
 public class ItineraryManageAgent extends BaseSubAgent {
+
+    @Autowired
+    private TravelSubmissionVerificationHook submissionVerificationHook;
 
     /**
      * 差旅单写工具集（submit_travel_approval / query_approval_status / cancel / modify）。
@@ -64,7 +68,7 @@ public class ItineraryManageAgent extends BaseSubAgent {
                 .toolExecutionContext(createToolCtx())
                 // 自动压缩/卸载大工具结果与历史，抑制多轮输入 token 膨胀（需搭配 AutoContextHook）
                 .memory(AgentMemoryFactory.create(stableModel))
-                .hooks(List.of(dynamicTimeInjectionHook, new AutoContextHook(), executionLoggerHook, progressNotifierHook, sessionPersistenceHook, activeAgentPersistenceHook,
+                .hooks(List.of(dynamicTimeInjectionHook, submissionVerificationHook, new AutoContextHook(), executionLoggerHook, progressNotifierHook, sessionPersistenceHook, activeAgentPersistenceHook,
                         new PendingToolRecoveryHook()))
                 .sysPrompt(PromptLoader.loadStatic("itinerary-manage-agent-system.md"))
                 .maxIters(MAX_ITERATIONS)

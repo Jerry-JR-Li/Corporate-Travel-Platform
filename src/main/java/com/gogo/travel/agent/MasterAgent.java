@@ -5,8 +5,10 @@ import com.gogo.travel.agent.context.AgentSessionContext;
 import com.gogo.travel.agent.context.AgentSessionContextHolder;
 import com.gogo.travel.agent.hook.ActiveAgentPersistenceHook;
 import com.gogo.travel.agent.hook.AgentExecutionLoggerHook;
+import com.gogo.travel.agent.hook.DynamicTimeInjectionHook;
 import com.gogo.travel.agent.hook.ProgressNotifierHook;
 import com.gogo.travel.agent.hook.SessionPersistenceHook;
+import com.gogo.travel.agent.hook.TravelSubmissionVerificationHook;
 import com.gogo.travel.agent.memory.AgentMemoryFactory;
 import com.gogo.travel.agent.memory.TravelPreferenceLongTermMemoryFactory;
 import com.gogo.travel.agent.tools.UserInteractionTools;
@@ -62,6 +64,10 @@ public class MasterAgent {
     private ActiveAgentPersistenceHook activeAgentPersistenceHook;
     @Autowired
     private TravelPreferenceLongTermMemoryFactory memoryFactory;
+    @Autowired
+    private TravelSubmissionVerificationHook submissionVerificationHook;
+    @Autowired
+    private DynamicTimeInjectionHook dynamicTimeInjectionHook;
 
     @Bean(name = "masterAgent")
     @Scope("prototype")
@@ -139,7 +145,7 @@ public class MasterAgent {
                 .memory(AgentMemoryFactory.create(stableModel))
                 .longTermMemory(longTermMemory)
                 .longTermMemoryMode(LongTermMemoryMode.AGENT_CONTROL)
-                .hooks(List.of(new AutoContextHook(), executionLoggerHook, progressNotifierHook, sessionPersistenceHook, new PendingToolRecoveryHook()))
+                .hooks(List.of(dynamicTimeInjectionHook, submissionVerificationHook, new AutoContextHook(), executionLoggerHook, progressNotifierHook, sessionPersistenceHook, new PendingToolRecoveryHook()))
                 .sysPrompt(PromptLoader.load("master-agent-system.md"))
                 .maxIters(MAX_ITERATIONS)
                 .generateOptions(GenerateOptions.builder()
