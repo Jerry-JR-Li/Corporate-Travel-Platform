@@ -1,0 +1,50 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+  filelog:
+    include:
+      - /var/log/gogo-agent/*.log
+    start_at: end
+    include_file_name: true
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+  resource/logs:
+    attributes:
+      - key: service.name
+        value: gogo-travel-agent
+        action: upsert
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+
+exporters:
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+  prometheus:
+    endpoint: 0.0.0.0:8889
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/jaeger]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
+    logs:
+      receivers: [otlp, filelog]
+      processors: [memory_limiter, resource/logs, batch]
+      exporters: [otlphttp/loki]

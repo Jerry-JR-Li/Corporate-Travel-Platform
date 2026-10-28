@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 10s
+  evaluation_interval: 10s
+
+scrape_configs:
+  # OTel Collector's Prometheus exporter receives OTLP metrics from the app.
+  - job_name: gogo-agent-otel
+    static_configs:
+      - targets: [otel-collector:8889]
+
+  # Also scrape Actuator directly for an easy health/debug fallback.
+  - job_name: gogo-agent-actuator
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: [host.docker.internal:8080]

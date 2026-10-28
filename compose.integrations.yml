@@ -1,0 +1,48 @@
+name: corporate-travel-integrations
+services:
+  pgvector:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: corporate_travel
+      POSTGRES_USER: corporate_travel
+      POSTGRES_PASSWORD: ${PGVECTOR_PASSWORD:?Set PGVECTOR_PASSWORD}
+    ports: ["127.0.0.1:25432:5432"]
+    volumes:
+      - pgvector_data:/var/lib/postgresql/data
+      - ./src/main/resources/db/pgvector-schema.sql:/docker-entrypoint-initdb.d/01-knowledge.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U corporate_travel -d corporate_travel"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  mem0:
+    build: ./infra/mem0
+    environment:
+      MEM0_API_KEY: ${MEM0_API_KEY:?Set MEM0_API_KEY}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:?Set DASHSCOPE_API_KEY}
+      PGVECTOR_PASSWORD: ${PGVECTOR_PASSWORD:?Set PGVECTOR_PASSWORD}
+      MEM0_PG_HOST: pgvector
+      MEM0_PG_DATABASE: corporate_travel
+      MEM0_PG_USER: corporate_travel
+      MEM0_LLM_MODEL: ${MEM0_LLM_MODEL:-qwen-flash}
+      MEM0_TELEMETRY: "false"
+    ports: ["127.0.0.1:18888:8888"]
+    depends_on:
+      pgvector: { condition: service_healthy }
+    volumes: ["mem0_data:/data"]
+    restart: unless-stopped
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    profiles: [observability]
+    command: ["--config=/etc/otelcol/config.yaml"]
+    environment:
+      LANGFUSE_OTEL_TRACES_ENDPOINT: ${LANGFUSE_OTEL_TRACES_ENDPOINT:-http://host.docker.internal:3031/api/public/otel/v1/traces}
+      LANGFUSE_OTEL_AUTH: ${LANGFUSE_OTEL_AUTH:-}
+    volumes: ["./infra/otel-langfuse.yaml:/etc/otelcol/config.yaml:ro"]
+    ports: ["127.0.0.1:25318:4318"]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    restart: unless-stopped
+volumes:
+  pgvector_data:
+  mem0_data:

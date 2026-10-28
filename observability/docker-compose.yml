@@ -1,0 +1,76 @@
+name: gogo-agent-observability
+
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    container_name: gogo-agent-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "127.0.0.1:24687:16686"
+    networks: [observability]
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    container_name: gogo-agent-otel-collector
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    depends_on: [jaeger, loki]
+    ports:
+      - "127.0.0.1:24319:4317"
+      - "127.0.0.1:24320:4318"
+      - "127.0.0.1:24389:8889"
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - ../logs:/var/log/gogo-agent:ro
+    networks: [observability]
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: gogo-agent-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:19091:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks: [observability]
+
+  loki:
+    image: grafana/loki:3.1.1
+    container_name: gogo-agent-loki
+    command: ["-config.file=/etc/loki/config.yaml"]
+    ports:
+      - "127.0.0.1:13101:3100"
+    volumes:
+      - ./loki-config.yaml:/etc/loki/config.yaml:ro
+      - loki_data:/loki
+    networks: [observability]
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: gogo-agent-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    depends_on: [prometheus, jaeger, loki]
+    ports:
+      - "127.0.0.1:13001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    networks: [observability]
+
+networks:
+  observability:
+    name: gogo-agent-observability
+
+volumes:
+  prometheus_data:
+  loki_data:
+  grafana_data:

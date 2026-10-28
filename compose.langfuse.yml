@@ -1,0 +1,118 @@
+name: corporate-travel-langfuse
+
+# Independent persistent storage; only the UI is exposed to the host.
+# Based on Langfuse's official v4.56.0 compose deployment.
+services:
+  langfuse-web:
+    image: ghcr.io/langfuse/langfuse:4.56.0
+    restart: unless-stopped
+    depends_on: &dependencies
+      postgres: { condition: service_healthy }
+      clickhouse: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    ports: ["127.0.0.1:3031:3000"]
+    environment: &langfuse-env
+      NEXTAUTH_URL: http://localhost:3031
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?Run scripts/init-integrations.ps1}
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?required}@postgres:5432/langfuse
+      SALT: ${SALT:?required}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?required}
+      TELEMETRY_ENABLED: "false"
+      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?required}
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_AUTH: ${REDIS_AUTH:?required}
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?required}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: minio
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?required}
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+      LANGFUSE_INIT_ORG_ID: corporate-travel-local
+      LANGFUSE_INIT_ORG_NAME: Corporate Travel
+      LANGFUSE_INIT_PROJECT_ID: corporate-travel
+      LANGFUSE_INIT_PROJECT_NAME: Corporate Travel
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:?required}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY:?required}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL:?required}
+      LANGFUSE_INIT_USER_NAME: Local Admin
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:?required}
+  langfuse-worker:
+    image: ghcr.io/langfuse/langfuse-worker:4.56.0
+    restart: unless-stopped
+    depends_on: *dependencies
+    environment: *langfuse-env
+  postgres:
+    image: postgres:17.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: langfuse
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d langfuse"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.12
+    restart: unless-stopped
+    user: "101:101"
+    environment:
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?required}
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_logs:/var/log/clickhouse-server
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8123/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_AUTH: ${REDIS_AUTH:?required}
+    command: ["sh", "-c", 'exec redis-server --requirepass "$$REDIS_AUTH" --appendonly yes --maxmemory-policy noeviction']
+    volumes: ["redis_data:/data"]
+    healthcheck:
+      test: ["CMD-SHELL", 'REDISCLI_AUTH="$$REDIS_AUTH" redis-cli ping | grep -q PONG']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    restart: unless-stopped
+    entrypoint: ["sh", "-c"]
+    command: ['mkdir -p /data/langfuse && exec minio server /data']
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?required}
+    volumes: ["minio_data:/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  postgres_data:
+  clickhouse_data:
+  clickhouse_logs:
+  redis_data:
+  minio_data:
